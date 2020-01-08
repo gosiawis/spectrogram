@@ -1,8 +1,7 @@
 import time
-from PyQt5 import QtWidgets
 import sys
+from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication
-
 from NewMainWindow import Ui_MainWindow
 
 
@@ -10,10 +9,11 @@ class App:
 
     def updatePlot(self):
         if time.time() - self.start_time > 2:
-            item = self.ui.spectrogramGraph.getPlotItem()
-            item.plot(y=self.ui.data, x=self.ui.times)
+            item = self.ui.amplitudeGraph.getPlotItem()
+            item.plot(y=self.ui.data[:, 0], x=self.ui.times)
             self.start_time = time.time()
-        self.ui.spectrogramGraph.setXRange(*self.ui.lr.getRegion(), padding=0)
+        #self.ui.amplitudeGraph.setXRange(*self.ui.lr.getRegion(), padding=0)
+        #self.ui.amplitudeRangeGraph.setYRange(*self.ui.ud.getRegion(), padding=10)
 
     def updateRegion(self):
         pass
@@ -23,8 +23,10 @@ class App:
         self.ui = Ui_MainWindow()
         self.ui.setupUi(appWindow)
         self.ui.lr.sigRegionChanged.connect(self.updatePlot)
-        self.ui.spectrogramGraph.sigXRangeChanged.connect(self.updateRegion)
-        self.updatePlot()
+        self.ui.amplitudeGraph.sigXRangeChanged.connect(self.updateRegion)
+        #self.ui.ud.sigRegionChanged.connect(self.updatePlot)
+        #self.ui.amplitudeRangeGraph.sigYRangeChanged.connect(self.updateRegion)
+        #self.updatePlot()
         self.ui.openWav.clicked.connect(self.ui.handleOpenButton)
 
 
