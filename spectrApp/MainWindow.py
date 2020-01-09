@@ -2,9 +2,12 @@ import pygame
 from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 from pyqtgraph import PlotWidget
-from scipy import signal
+from scipy import signal, random
 from scipy.io import wavfile
 import numpy as np
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import matplotlib.pyplot as plt
 
 
 
@@ -29,26 +32,9 @@ class Ui_MainWindow():
         self.widget = QtWidgets.QWidget(self.gridLayoutWidget)
         self.widget.setObjectName("widget")
 
-        #self.spectrogramWidget = PlotWidget(self.widget)
-        #self.spectrogramWidget.setGeometry(QtCore.QRect(0, 0, 791, 291))
-        #self.spectrogramWidget.setObjectName("spectrogramWidget")
-        #self.spectrogramWidget.setBackground('w')
-        #self.spectrogramWidget.setTitle("<span style=\"color:black;font-size:12px\">Spektrogram</span>")
-        #self.spectrogramWidget.setLabel('left', "<span style=\"color:blue;font-size:10px\">Częstotliwość (Hz)</span>")
-        #self.spectrogramWidget.setLabel('bottom', "<span style=\"color:blue;font-size:10px\">Czas (s)</span>")
-
-        self.spectrogramWidget = pg.GraphicsLayoutWidget(self.widget)
-        self.spectrogramWidget.setGeometry(QtCore.QRect(0, 0, 791, 291))
-        self.spectrogramWidget.setObjectName("spectrogramWidget")
-
-        self.amplitudeWidget = PlotWidget(self.widget)
-        self.amplitudeWidget.setGeometry(QtCore.QRect(0, 290, 791, 220))
-        self.amplitudeWidget.setObjectName("amplitudeLayout")
-        self.amplitudeWidget.setBackground('w')
-        self.amplitudeWidget.setTitle("<span style=\"color:black;font-size:12px\">Wykres amplitudy do czasu</span>")
-        self.amplitudeWidget.setLabel('left', "<span style=\"color:blue;font-size:10px\">Amplituda</span>")
-        self.amplitudeWidget.setLabel('bottom', "<span style=\"color:blue;font-size:10px\">Czas (s)</span>")
-
+        self.figure = plt.figure()
+        self.canvas = FigureCanvas(self.figure)
+        self.gridLayout.addWidget(self.canvas)
 
         self.gridLayout.addWidget(self.widget, 1, 0, 1, 1)
 
@@ -94,13 +80,13 @@ class Ui_MainWindow():
         self.actionWide = QtWidgets.QAction(MainWindow)
         self.actionWide.setObjectName("actionWide")
 
-        self.actionSaveSpectrogram = QtWidgets.QAction(MainWindow, triggered=self.saveSpectrogram)
+        self.actionSaveSpectrogram = QtWidgets.QAction(MainWindow)
         self.actionSaveSpectrogram.setObjectName("actionSaveSpectrogram")
 
-        self.actionSaveAmplitude = QtWidgets.QAction(MainWindow, triggered=self.saveAmplitude)
+        self.actionSaveAmplitude = QtWidgets.QAction(MainWindow)
         self.actionSaveAmplitude.setObjectName("actionSaveAmplitude")
 
-        self.actionSaveBoth = QtWidgets.QAction(MainWindow, triggered=self.saveBoth)
+        self.actionSaveBoth = QtWidgets.QAction(MainWindow)
         self.actionSaveBoth.setObjectName("actionSaveBoth")
 
         self.actionOkienkowanie = QtWidgets.QAction(MainWindow)
@@ -158,39 +144,16 @@ class Ui_MainWindow():
         self.samplerate, self.data = wavfile.read(
             self.filePath)  # samplerate -> częstotliwość, data-> wartości amplitudy dla każdej próbki
         self.sekundy = len(self.data) / float(self.samplerate)
-        self.times = np.arange(len(self.data)) / float(self.samplerate)
 
-    def drawSpectrogram(self):
-        item = self.spectrogramWidget
-        item.clear()
-        f, t, Sxx = signal.spectrogram(self.data[:, 0], fs=self.samplerate)
-        pg.setConfigOptions(imageAxisOrder='row-major')
-        pg.mkQApp()
-        plot = item.addPlot()
-        img = pg.ImageItem()
-        plot.addItem(img)
-        hist = pg.HistogramLUTItem()
-        hist.setImageItem(img)
-        item.addItem(hist)
-        item.show()
-        hist.setLevels(np.min(Sxx), np.max(Sxx))
-        hist.gradient.restoreState(
-            {'mode': 'rgb',
-             'ticks': [(0.5, (0, 182, 188, 255)),
-                       (1.0, (246, 111, 0, 255)),
-                       (0.0, (75, 0, 113, 255))]})
-        img.setImage(Sxx)
-        img.scale(t[-1] / np.size(Sxx, axis=1),
-                  f[-1] / np.size(Sxx, axis=0))
-        plot.setLimits(xMin=0, xMax=t[-1], yMin=0, yMax=f[-1])
-        plot.setLabel('bottom', "Czas", units='s')
-        plot.setLabel('left', "Częstotliwość", units='Hz')
+    def prepareSpectroGraph(self):
+        self.spectrGraph.specgram(self.data[:, 0], Fs=self.samplerate)
+        self.spectrGraph.set_ylabel('Częstotliwość [Hz]')
 
-    def drawAmplitude(self):
-        item = self.amplitudeWidget.getPlotItem()
-        item.clear()
-        pen = pg.mkPen('b')
-        item.plot(y=self.data[:, 0], x=self.times, pen=pen)
+    def prepareAmplitudeGraph(self):
+        self.ampliGraphax.plot(np.arange(len(self.data)) / float(self.samplerate), self.data[:, 0], )
+        self.ampliGraphax.set_xlim(left=0, right=(np.arange(len(self.data)) / float(self.samplerate))[-1])
+        self.ampliGraphax.set_ylabel('Amplituda')
+        self.ampliGraphax.set_xlabel('Czas [s]')
 
     def playWav(self):
         pygame.init()
@@ -200,11 +163,17 @@ class Ui_MainWindow():
     def drawGraph(self):
         self.openWav()
         self.calculateData()
+        self.figure.clear()
         self.playWav()
-        self.drawAmplitude()
-        self.drawSpectrogram()
+        self.spectrGraph = self.figure.add_axes([0.1, 0.5, 0.8, 0.4], xticklabels=[], ylim=(-1.2, 1.2))
+        self.ampliGraphax = self.figure.add_axes([0.1, 0.1, 0.8, 0.4], ylim=(-100000, 100000))
+        self.prepareAmplitudeGraph()
+        self.prepareSpectroGraph()
+        self.spectrGraph.draw(renderer=None)
+        self.ampliGraphax.draw(renderer=None)
+        self.canvas.draw()
 
-    def saveSpectrogram(self):
+    '''def saveSpectrogram(self):
         title = self.actionSaveSpectrogram.text()
         item = self.spectrogramWidget
         pix = item.grab()
@@ -222,4 +191,4 @@ class Ui_MainWindow():
 
     def saveBoth(self):
         self.saveSpectrogram()
-        self.saveAmplitude()
+        self.saveAmplitude()'''
