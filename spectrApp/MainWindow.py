@@ -10,19 +10,18 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 
 
-
 class Ui_MainWindow():
     def __init__(self):
         self.filePath = None
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(800, 600)
+        MainWindow.resize(808, 525)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
 
         self.gridLayoutWidget = QtWidgets.QWidget(self.centralwidget)
-        self.gridLayoutWidget.setGeometry(QtCore.QRect(0, 0, 791, 551))
+        self.gridLayoutWidget.setGeometry(QtCore.QRect(0, 0, 811, 491))
         self.gridLayoutWidget.setObjectName("gridLayoutWidget")
 
         self.gridLayout = QtWidgets.QGridLayout(self.gridLayoutWidget)
@@ -40,7 +39,7 @@ class Ui_MainWindow():
 
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 21))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 808, 21))
         self.menubar.setObjectName("menubar")
         self.menuFile = QtWidgets.QMenu(self.menubar)
         self.menuFile.setObjectName("menuFile")
@@ -59,19 +58,19 @@ class Ui_MainWindow():
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
 
-        self.actionOpen = QtWidgets.QAction(MainWindow, triggered=self.drawGraph)
+        self.actionOpen = QtWidgets.QAction(MainWindow, triggered=self.openWav)
         self.actionOpen.setObjectName("actionOpen")
 
-        self.actionPlusX = QtWidgets.QAction(MainWindow)
+        self.actionPlusX = QtWidgets.QAction(MainWindow, triggered=self.plusX)
         self.actionPlusX.setObjectName("actionPlusX")
 
-        self.actionMinusX = QtWidgets.QAction(MainWindow)
+        self.actionMinusX = QtWidgets.QAction(MainWindow, triggered=self.minusX)
         self.actionMinusX.setObjectName("actionMinusX")
 
-        self.actionPlusY = QtWidgets.QAction(MainWindow)
+        self.actionPlusY = QtWidgets.QAction(MainWindow, triggered=self.plusY)
         self.actionPlusY.setObjectName("actionPlusY")
 
-        self.actionMinusY = QtWidgets.QAction(MainWindow)
+        self.actionMinusY = QtWidgets.QAction(MainWindow, triggered=self.minusY)
         self.actionMinusY.setObjectName("actionMinusY")
 
         self.actionNarrow = QtWidgets.QAction(MainWindow)
@@ -80,13 +79,13 @@ class Ui_MainWindow():
         self.actionWide = QtWidgets.QAction(MainWindow)
         self.actionWide.setObjectName("actionWide")
 
-        self.actionSaveSpectrogram = QtWidgets.QAction(MainWindow)
+        self.actionSaveSpectrogram = QtWidgets.QAction(MainWindow, triggered=self.saveSpectrogram)
         self.actionSaveSpectrogram.setObjectName("actionSaveSpectrogram")
 
-        self.actionSaveAmplitude = QtWidgets.QAction(MainWindow)
+        self.actionSaveAmplitude = QtWidgets.QAction(MainWindow, triggered=self.saveAmplitude)
         self.actionSaveAmplitude.setObjectName("actionSaveAmplitude")
 
-        self.actionSaveBoth = QtWidgets.QAction(MainWindow)
+        self.actionSaveBoth = QtWidgets.QAction(MainWindow, triggered=self.saveBoth)
         self.actionSaveBoth.setObjectName("actionSaveBoth")
 
         self.actionOkienkowanie = QtWidgets.QAction(MainWindow)
@@ -135,55 +134,74 @@ class Ui_MainWindow():
         self.actionOkienkowanie.setText(_translate("MainWindow", "Okienkowanie"))
 
     def openWav(self):
+        self.plusXTimes = 1
+        self.minusXTimes = 1
+        self.plusYTimes = 1
+        self.minusYTimes = 1
         title = self.actionOpen.text()
         dialog = QtWidgets.QFileDialog()
         filename, _filter = dialog.getOpenFileNames(dialog, title, None, 'wav-files: *.wav')
         self.filePath = str(filename[0])
+        self.calculateData()
+        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp)
 
     def calculateData(self):
-        self.samplerate, self.data = wavfile.read(
-            self.filePath)  # samplerate -> częstotliwość, data-> wartości amplitudy dla każdej próbki
-        self.sekundy = len(self.data) / float(self.samplerate)
+        # samplerate -> częstotliwość, data-> wartości amplitudy dla każdej próbki
+        self.samplerate, self.data = wavfile.read(self.filePath)
+        self.times = np.arange(len(self.data)) / float(self.samplerate)
+        self.xLeftLimit = 0
+        self.xRightLimit = self.times[-1]
+        print(self.data)
+        print(self.data.ndim)
+        if self.data.ndim == 2:
+            self.dataDimension = self.data[:, 0]
+        elif self.data.ndim == 1:
+            self.dataDimension = self.data
+        self.yBottomLimitAmp = min(self.dataDimension)
+        self.yTopLimitAmp = max(self.dataDimension)
+        self.yBottomLimitSpec = 0
+        self.yTopLimitSpec = self.samplerate
+        self.yDividedAmp = ((self.yBottomLimitAmp * (-1)) + self.yTopLimitAmp) / 24
+        self.xDivided = self.xRightLimit / 24
 
     def prepareSpectroGraph(self):
-        self.spectrGraph.specgram(self.data[:, 0], Fs=self.samplerate)
+        self.spectrGraph.specgram(self.dataDimension, Fs=self.samplerate)
         self.spectrGraph.set_ylabel('Częstotliwość [Hz]')
+        self.spectrGraph.set_xlabel('Czas [s]')
 
     def prepareAmplitudeGraph(self):
-        self.ampliGraphax.plot(np.arange(len(self.data)) / float(self.samplerate), self.data[:, 0], )
-        self.ampliGraphax.set_xlim(left=0, right=(np.arange(len(self.data)) / float(self.samplerate))[-1])
-        self.ampliGraphax.set_ylabel('Amplituda')
-        self.ampliGraphax.set_xlabel('Czas [s]')
+        self.ampliGraph.plot(self.times, self.dataDimension)
+        # self.ampliGraph.set_xlim(left=self.XLeftLimit, right=self.XRightLimit)
+        self.ampliGraph.set_ylabel('Amplituda')
+        self.ampliGraph.set_xlabel('Czas [s]')
 
     def playWav(self):
         pygame.init()
         pygame.mixer.music.load(str(self.filePath))
         pygame.mixer.music.play()
 
-    def drawGraph(self):
-        self.openWav()
-        self.calculateData()
+    def drawGraph(self, xLeft, xRight, yLeft, yRight):
         self.figure.clear()
         self.playWav()
-        self.spectrGraph = self.figure.add_axes([0.1, 0.5, 0.8, 0.4], xticklabels=[], ylim=(-1.2, 1.2))
-        self.ampliGraphax = self.figure.add_axes([0.1, 0.1, 0.8, 0.4], ylim=(-100000, 100000))
+        self.spectrGraph = self.figure.add_axes([0.13, 0.57, 0.8, 0.4], xticklabels=[],
+                                                ylim=(self.yBottomLimitSpec, self.yTopLimitSpec), xlim=(xLeft, xRight))
+        self.ampliGraph = self.figure.add_axes([0.13, 0.095, 0.8, 0.4],
+                                               ylim=(yLeft, yRight), xlim=(xLeft, xRight))
         self.prepareAmplitudeGraph()
         self.prepareSpectroGraph()
         self.spectrGraph.draw(renderer=None)
-        self.ampliGraphax.draw(renderer=None)
+        self.ampliGraph.draw(renderer=None)
         self.canvas.draw()
 
-    '''def saveSpectrogram(self):
+    def saveSpectrogram(self):
         title = self.actionSaveSpectrogram.text()
-        item = self.spectrogramWidget
-        pix = item.grab()
         dialog = QtWidgets.QFileDialog()
         filename = dialog.getSaveFileName(dialog, title, None, 'Image Files (*.png *.jpg *.jpeg)')
-        pix.save(str(filename[0]))
+        self.figure.saveFig(str(filename[0]))
 
     def saveAmplitude(self):
         title = self.actionSaveAmplitude.text()
-        item = self.amplitudeWidget
+        item = self.ampliGraph
         pix = item.grab()
         dialog = QtWidgets.QFileDialog()
         filename = dialog.getSaveFileName(dialog, title, None, 'Image Files (*.png *.jpg *.jpeg)')
@@ -191,4 +209,60 @@ class Ui_MainWindow():
 
     def saveBoth(self):
         self.saveSpectrogram()
-        self.saveAmplitude()'''
+        self.saveAmplitude()
+
+    def plusX(self):  # works only for amplitude graph
+        self.rightXManipulated = self.xRightLimit - (self.xDivided * self.plusXTimes)
+        self.leftXManipulated = self.xLeftLimit + (self.xDivided * self.plusXTimes)
+        if self.rightXManipulated == self.leftXManipulated:
+            return 0
+        if self.plusYTimes == 1 and self.minusYTimes == 1:
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.yBottomLimitAmp, self.yTopLimitAmp)
+        elif self.plusYTimes != 1 or self.minusYTimes != 1:
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
+        self.plusXTimes += 1
+        self.minusXTimes -= 1
+
+    def minusX(self):
+        if self.minusXTimes != self.plusXTimes:
+            self.rightXManipulated = self.xRightLimit + (self.xDivided * self.minusXTimes)
+            self.leftXManipulated = self.xLeftLimit - (self.xDivided * self.minusXTimes)
+        if self.minusXTimes == self.plusXTimes:
+            return 0
+        if self.rightXManipulated == self.leftXManipulated:
+            return 0
+        if self.plusYTimes == 1 and self.minusYTimes == 1:
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.yBottomLimitAmp, self.yTopLimitAmp)
+        elif self.plusYTimes != 1 or self.minusYTimes != 1:
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
+        self.plusXTimes -= 1
+        self.minusXTimes += 1
+
+    def plusY(self):
+        self.topYManipulated = self.yTopLimitAmp - (self.yDividedAmp * self.plusYTimes)
+        self.bottomYManipulated = self.yBottomLimitAmp + (self.yDividedAmp * self.plusYTimes)
+        if self.topYManipulated == self.bottomYManipulated:
+            return 0
+        if self.plusXTimes == 1 and self.minusXTimes == 1:
+            self.drawGraph(self.xLeftLimit, self.xRightLimit, self.bottomYManipulated, self.topYManipulated)
+        elif self.plusXTimes != 1 or self.minusXTimes != 1:
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
+        self.plusYTimes += 1
+        self.minusYTimes -= 1
+
+    def minusY(self):
+        topY = 0
+        bottomY = 0
+        if self.minusYTimes != self.plusYTimes:
+            self.topYManipulated = self.yTopLimitAmp + (self.yDividedAmp * self.minusYTimes)
+            self.bottomYManipulated = self.yBottomLimitAmp - (self.yDividedAmp * self.minusYTimes)
+        if self.minusYTimes == self.plusYTimes:
+            return 0
+        if self.topYManipulated == self.bottomYManipulated:
+            return 0
+        if self.plusXTimes == 1 and self.minusXTimes == 1:
+            self.drawGraph(self.xLeftLimit, self.xRightLimit, self.bottomYManipulated, self.topYManipulated)
+        elif self.plusXTimes != 1 or self.minusXTimes != 1:
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
+        self.plusYTimes += 1
+        self.minusYTimes -= 1
