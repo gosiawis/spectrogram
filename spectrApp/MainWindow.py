@@ -1,12 +1,10 @@
 import pygame
 from PyQt5 import QtCore, QtGui, QtWidgets
 from matplotlib.mlab import window_hanning
-from scipy.fftpack import fft
 from scipy.io import wavfile
 import numpy as np
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
-import scipy.fftpack
 
 
 class Ui_MainWindow():
@@ -48,8 +46,6 @@ class Ui_MainWindow():
         self.menuOX.setObjectName("menuOX")
         self.menuOY = QtWidgets.QMenu(self.menuView)
         self.menuOY.setObjectName("menuOY")
-        self.menuPasmo = QtWidgets.QMenu(self.menubar)
-        self.menuPasmo.setObjectName("menuPasmo")
         self.menuSave = QtWidgets.QMenu(self.menubar)
         self.menuSave.setObjectName("menuSave")
         self.menuOkienkowanie = QtWidgets.QMenu(self.menuView)
@@ -73,12 +69,6 @@ class Ui_MainWindow():
 
         self.actionMinusY = QtWidgets.QAction(MainWindow, triggered=self.minusY)
         self.actionMinusY.setObjectName("actionMinusY")
-
-        self.actionNarrow = QtWidgets.QAction(MainWindow)
-        self.actionNarrow.setObjectName("actionNear")
-
-        self.actionWide = QtWidgets.QAction(MainWindow)
-        self.actionWide.setObjectName("actionWide")
 
         self.actionSaveSpectrogram = QtWidgets.QAction(MainWindow, triggered=self.saveSpectrogram)
         self.actionSaveSpectrogram.setObjectName("actionSaveSpectrogram")
@@ -121,11 +111,8 @@ class Ui_MainWindow():
         self.menuView.addAction(self.menuOkienkowanie.menuAction())
         self.menuView.addAction(self.menuOX.menuAction())
         self.menuView.addAction(self.menuOY.menuAction())
-        self.menuPasmo.addAction(self.actionNarrow)
-        self.menuPasmo.addAction(self.actionWide)
         self.menubar.addAction(self.menuFile.menuAction())
         self.menubar.addAction(self.menuView.menuAction())
-        self.menubar.addAction(self.menuPasmo.menuAction())
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -137,7 +124,6 @@ class Ui_MainWindow():
         self.menuView.setTitle(_translate("MainWindow", "Wyświetlacz"))
         self.menuOX.setTitle(_translate("MainWindow", "Oś X"))
         self.menuOY.setTitle(_translate("MainWindow", "Oś Y"))
-        self.menuPasmo.setTitle(_translate("MainWindow", "Wybór pasma"))
         self.menuSave.setTitle(_translate("MainWindow", "Zapisz wykres"))
         self.menuOkienkowanie.setTitle(_translate("MainWindow", "Okienkowanie"))
         self.actionOpen.setText(_translate("MainWindow", "Otwieranie"))
@@ -145,8 +131,6 @@ class Ui_MainWindow():
         self.actionMinusX.setText(_translate("MainWindow", "Oddal"))
         self.actionPlusY.setText(_translate("MainWindow", "Przybliż"))
         self.actionMinusY.setText(_translate("MainWindow", "Oddal"))
-        self.actionNarrow.setText(_translate("MainWindow", "Wąskopasowy"))
-        self.actionWide.setText(_translate("MainWindow", "Szerokopasmowy"))
         self.actionSaveSpectrogram.setText(_translate("MainWindow", "Zapisz spektrogram"))
         self.actionSaveAmplitude.setText(_translate("MainWindow", "Zapisz wykres amplitudy"))
         self.actionSaveBoth.setText(_translate("MainWindow", "Zapisz oba wykresy"))
@@ -164,6 +148,8 @@ class Ui_MainWindow():
         title = self.actionOpen.text()
         dialog = QtWidgets.QFileDialog()
         filename, _filter = dialog.getOpenFileNames(dialog, title, None, 'wav-files: *.wav')
+        if filename == []:
+            return 0
         self.filePath = str(filename[0])
         self.calculateData()
         self.playWav()
@@ -175,8 +161,6 @@ class Ui_MainWindow():
         self.times = np.arange(len(self.data)) / float(self.samplerate)
         self.xLeftLimit = 0
         self.xRightLimit = self.times[-1]
-        print(self.data)
-        print(self.data.ndim)
         if self.data.ndim == 2:
             self.dataDimension = self.data[:, 0]
         elif self.data.ndim == 1:
@@ -185,11 +169,12 @@ class Ui_MainWindow():
         self.yTopLimitAmp = max(self.dataDimension)
         self.yBottomLimitSpec = 0
         self.yTopLimitSpec = self.samplerate
-        self.yDividedAmp = ((self.yBottomLimitAmp * (-1)) + self.yTopLimitAmp) / 24
-        self.xDivided = self.xRightLimit / 24
+        self.yDividedAmp = ((self.yBottomLimitAmp * (-1)) + self.yTopLimitAmp) / 12
+        self.xDivided = self.xRightLimit / 12
 
     def prepareSpectroGraph(self, win):
-        self.spectrGraph.specgram(self.dataDimension, Fs=self.samplerate, cmap='jet', window=win)
+        self.spectrGraph.specgram(self.dataDimension, Fs=self.samplerate, cmap='jet', window=win,
+                                  xextent=(self.xLeftLimit, self.xRightLimit))
         self.spectrGraph.set_ylabel('Częstotliwość [Hz]')
         self.spectrGraph.set_xlabel('Czas [s]')
 
@@ -207,7 +192,8 @@ class Ui_MainWindow():
     def drawGraph(self, xLeft, xRight, yBottom, yTop, win):
         self.figure.clear()
         self.spectrGraph = self.figure.add_axes([0.13, 0.57, 0.8, 0.4], xticklabels=[],
-                                                ylim=(self.yBottomLimitSpec, self.yTopLimitSpec), xlim=(self.xLeftLimit, self.xRightLimit))
+                                                ylim=(self.yBottomLimitSpec, self.yTopLimitSpec),
+                                                xlim=(self.xLeftLimit, self.xRightLimit))
         self.ampliGraph = self.figure.add_axes([0.13, 0.095, 0.8, 0.4],
                                                ylim=(yBottom, yTop), xlim=(xLeft, xRight))
         self.prepareAmplitudeGraph()
@@ -228,7 +214,7 @@ class Ui_MainWindow():
         dialog = QtWidgets.QFileDialog()
         filename = dialog.getSaveFileName(dialog, title, None, 'Image Files (*.png *.jpg *.jpeg)')
         extent = self.ampliGraph.get_window_extent().transformed(self.figure.dpi_scale_trans.inverted())
-        self.figure.savefig(str(filename[0]), bbox_inches=extent.expanded(1.25, 1.20))
+        self.figure.savefig(str(filename[0]), bbox_inches=extent.expanded(1.3, 1.25))
 
     def saveBoth(self):
         title = self.actionSaveSpectrogram.text()
@@ -242,9 +228,11 @@ class Ui_MainWindow():
         if self.rightXManipulated == self.leftXManipulated:
             return 0
         if self.plusYTimes == 1 and self.minusYTimes == 1:
-            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.yBottomLimitAmp, self.yTopLimitAmp)
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.yBottomLimitAmp, self.yTopLimitAmp,
+                           window_hanning)
         elif self.plusYTimes != 1 or self.minusYTimes != 1:
-            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated,
+                           window_hanning)
         self.plusXTimes += 1
         self.minusXTimes -= 1
 
@@ -257,9 +245,11 @@ class Ui_MainWindow():
         if self.rightXManipulated == self.leftXManipulated:
             return 0
         if self.plusYTimes == 1 and self.minusYTimes == 1:
-            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.yBottomLimitAmp, self.yTopLimitAmp)
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.yBottomLimitAmp, self.yTopLimitAmp,
+                           window_hanning)
         elif self.plusYTimes != 1 or self.minusYTimes != 1:
-            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated,
+                           window_hanning)
         self.plusXTimes -= 1
         self.minusXTimes += 1
 
@@ -269,28 +259,29 @@ class Ui_MainWindow():
         if self.topYManipulated == self.bottomYManipulated:
             return 0
         if self.plusXTimes == 1 and self.minusXTimes == 1:
-            self.drawGraph(self.xLeftLimit, self.xRightLimit, self.bottomYManipulated, self.topYManipulated)
+            self.drawGraph(self.xLeftLimit, self.xRightLimit, self.bottomYManipulated, self.topYManipulated,
+                           window_hanning)
         elif self.plusXTimes != 1 or self.minusXTimes != 1:
-            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated,
+                           window_hanning)
         self.plusYTimes += 1
         self.minusYTimes -= 1
 
     def minusY(self):
         topY = 0
         bottomY = 0
-        if self.minusYTimes != self.plusYTimes:
-            self.topYManipulated = self.yTopLimitAmp + (self.yDividedAmp * self.minusYTimes)
-            self.bottomYManipulated = self.yBottomLimitAmp - (self.yDividedAmp * self.minusYTimes)
-        if self.minusYTimes == self.plusYTimes:
-            return 0
+        self.topYManipulated = self.yTopLimitAmp + (self.yDividedAmp * self.minusYTimes)
+        self.bottomYManipulated = self.yBottomLimitAmp - (self.yDividedAmp * self.minusYTimes)
         if self.topYManipulated == self.bottomYManipulated:
             return 0
         if self.plusXTimes == 1 and self.minusXTimes == 1:
-            self.drawGraph(self.xLeftLimit, self.xRightLimit, self.bottomYManipulated, self.topYManipulated)
+            self.drawGraph(self.xLeftLimit, self.xRightLimit, self.bottomYManipulated, self.topYManipulated,
+                           window_hanning)
         elif self.plusXTimes != 1 or self.minusXTimes != 1:
-            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
-        self.plusYTimes += 1
-        self.minusYTimes -= 1
+            self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated,
+                           window_hanning)
+        self.plusYTimes -= 1
+        self.minusYTimes += 1
 
     def windowKaiser(self):
         self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, np.kaiser(256, 8))
@@ -306,3 +297,4 @@ class Ui_MainWindow():
 
     def windowHamming(self):
         self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, np.hamming(256))
+
