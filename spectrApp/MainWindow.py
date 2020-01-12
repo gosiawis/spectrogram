@@ -1,13 +1,12 @@
 import pygame
 from PyQt5 import QtCore, QtGui, QtWidgets
-import pyqtgraph as pg
-from pyqtgraph import PlotWidget
-from scipy import signal, random
+from matplotlib.mlab import window_hanning
+from scipy.fftpack import fft
 from scipy.io import wavfile
 import numpy as np
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
+import scipy.fftpack
 
 
 class Ui_MainWindow():
@@ -53,6 +52,8 @@ class Ui_MainWindow():
         self.menuPasmo.setObjectName("menuPasmo")
         self.menuSave = QtWidgets.QMenu(self.menubar)
         self.menuSave.setObjectName("menuSave")
+        self.menuOkienkowanie = QtWidgets.QMenu(self.menuView)
+        self.menuOkienkowanie.setObjectName("menuOkienkowanie")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
@@ -88,8 +89,20 @@ class Ui_MainWindow():
         self.actionSaveBoth = QtWidgets.QAction(MainWindow, triggered=self.saveBoth)
         self.actionSaveBoth.setObjectName("actionSaveBoth")
 
-        self.actionOkienkowanie = QtWidgets.QAction(MainWindow)
-        self.actionOkienkowanie.setObjectName("actionOkienkowanie")
+        self.actionHamming = QtWidgets.QAction(MainWindow, triggered=self.windowHamming)
+        self.actionHamming.setObjectName("actionHamming")
+
+        self.actionHanning = QtWidgets.QAction(MainWindow, triggered=self.windowHanning)
+        self.actionHanning.setObjectName("actionHanning")
+
+        self.actionBartlett = QtWidgets.QAction(MainWindow, triggered=self.windowBartlett)
+        self.actionBartlett.setObjectName("actionBartlett")
+
+        self.actionKaiser = QtWidgets.QAction(MainWindow, triggered=self.windowKaiser)
+        self.actionKaiser.setObjectName("actionKaiser")
+
+        self.actionBlackman = QtWidgets.QAction(MainWindow, triggered=self.windowBlackman)
+        self.actionBlackman.setObjectName("actionBlackman")
 
         self.menuFile.addAction(self.actionOpen)
         self.menuSave.addAction(self.actionSaveSpectrogram)
@@ -100,9 +113,14 @@ class Ui_MainWindow():
         self.menuOX.addAction(self.actionMinusX)
         self.menuOY.addAction(self.actionPlusY)
         self.menuOY.addAction(self.actionMinusY)
+        self.menuOkienkowanie.addAction(self.actionHamming)
+        self.menuOkienkowanie.addAction(self.actionHanning)
+        self.menuOkienkowanie.addAction(self.actionBartlett)
+        self.menuOkienkowanie.addAction(self.actionKaiser)
+        self.menuOkienkowanie.addAction(self.actionBlackman)
+        self.menuView.addAction(self.menuOkienkowanie.menuAction())
         self.menuView.addAction(self.menuOX.menuAction())
         self.menuView.addAction(self.menuOY.menuAction())
-        self.menuView.addAction(self.actionOkienkowanie)
         self.menuPasmo.addAction(self.actionNarrow)
         self.menuPasmo.addAction(self.actionWide)
         self.menubar.addAction(self.menuFile.menuAction())
@@ -121,6 +139,7 @@ class Ui_MainWindow():
         self.menuOY.setTitle(_translate("MainWindow", "Oś Y"))
         self.menuPasmo.setTitle(_translate("MainWindow", "Wybór pasma"))
         self.menuSave.setTitle(_translate("MainWindow", "Zapisz wykres"))
+        self.menuOkienkowanie.setTitle(_translate("MainWindow", "Okienkowanie"))
         self.actionOpen.setText(_translate("MainWindow", "Otwieranie"))
         self.actionPlusX.setText(_translate("MainWindow", "Przybliż"))
         self.actionMinusX.setText(_translate("MainWindow", "Oddal"))
@@ -131,7 +150,11 @@ class Ui_MainWindow():
         self.actionSaveSpectrogram.setText(_translate("MainWindow", "Zapisz spektrogram"))
         self.actionSaveAmplitude.setText(_translate("MainWindow", "Zapisz wykres amplitudy"))
         self.actionSaveBoth.setText(_translate("MainWindow", "Zapisz oba wykresy"))
-        self.actionOkienkowanie.setText(_translate("MainWindow", "Okienkowanie"))
+        self.actionHamming.setText(_translate("MainWindow", "Hamming"))
+        self.actionHanning.setText(_translate("MainWindow", "Hanning"))
+        self.actionBartlett.setText(_translate("MainWindow", "Bartlett"))
+        self.actionKaiser.setText(_translate("MainWindow", "Kaiser"))
+        self.actionBlackman.setText(_translate("MainWindow", "Blackman"))
 
     def openWav(self):
         self.plusXTimes = 1
@@ -143,7 +166,8 @@ class Ui_MainWindow():
         filename, _filter = dialog.getOpenFileNames(dialog, title, None, 'wav-files: *.wav')
         self.filePath = str(filename[0])
         self.calculateData()
-        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp)
+        self.playWav()
+        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, window_hanning)
 
     def calculateData(self):
         # samplerate -> częstotliwość, data-> wartości amplitudy dla każdej próbki
@@ -164,8 +188,8 @@ class Ui_MainWindow():
         self.yDividedAmp = ((self.yBottomLimitAmp * (-1)) + self.yTopLimitAmp) / 24
         self.xDivided = self.xRightLimit / 24
 
-    def prepareSpectroGraph(self):
-        self.spectrGraph.specgram(self.dataDimension, Fs=self.samplerate)
+    def prepareSpectroGraph(self, win):
+        self.spectrGraph.specgram(self.dataDimension, Fs=self.samplerate, cmap='jet', window=win)
         self.spectrGraph.set_ylabel('Częstotliwość [Hz]')
         self.spectrGraph.set_xlabel('Czas [s]')
 
@@ -180,15 +204,14 @@ class Ui_MainWindow():
         pygame.mixer.music.load(str(self.filePath))
         pygame.mixer.music.play()
 
-    def drawGraph(self, xLeft, xRight, yLeft, yRight):
+    def drawGraph(self, xLeft, xRight, yBottom, yTop, win):
         self.figure.clear()
-        self.playWav()
         self.spectrGraph = self.figure.add_axes([0.13, 0.57, 0.8, 0.4], xticklabels=[],
-                                                ylim=(self.yBottomLimitSpec, self.yTopLimitSpec), xlim=(xLeft, xRight))
+                                                ylim=(self.yBottomLimitSpec, self.yTopLimitSpec), xlim=(self.xLeftLimit, self.xRightLimit))
         self.ampliGraph = self.figure.add_axes([0.13, 0.095, 0.8, 0.4],
-                                               ylim=(yLeft, yRight), xlim=(xLeft, xRight))
+                                               ylim=(yBottom, yTop), xlim=(xLeft, xRight))
         self.prepareAmplitudeGraph()
-        self.prepareSpectroGraph()
+        self.prepareSpectroGraph(win)
         self.spectrGraph.draw(renderer=None)
         self.ampliGraph.draw(renderer=None)
         self.canvas.draw()
@@ -197,19 +220,21 @@ class Ui_MainWindow():
         title = self.actionSaveSpectrogram.text()
         dialog = QtWidgets.QFileDialog()
         filename = dialog.getSaveFileName(dialog, title, None, 'Image Files (*.png *.jpg *.jpeg)')
-        self.figure.saveFig(str(filename[0]))
+        extent = self.spectrGraph.get_window_extent().transformed(self.figure.dpi_scale_trans.inverted())
+        self.figure.savefig(str(filename[0]), bbox_inches=extent.expanded(1.25, 1.35))
 
     def saveAmplitude(self):
-        title = self.actionSaveAmplitude.text()
-        item = self.ampliGraph
-        pix = item.grab()
+        title = self.actionSaveSpectrogram.text()
         dialog = QtWidgets.QFileDialog()
         filename = dialog.getSaveFileName(dialog, title, None, 'Image Files (*.png *.jpg *.jpeg)')
-        pix.save(str(filename[0]))
+        extent = self.ampliGraph.get_window_extent().transformed(self.figure.dpi_scale_trans.inverted())
+        self.figure.savefig(str(filename[0]), bbox_inches=extent.expanded(1.25, 1.20))
 
     def saveBoth(self):
-        self.saveSpectrogram()
-        self.saveAmplitude()
+        title = self.actionSaveSpectrogram.text()
+        dialog = QtWidgets.QFileDialog()
+        filename = dialog.getSaveFileName(dialog, title, None, 'Image Files (*.png *.jpg *.jpeg)')
+        self.figure.savefig(str(filename[0]))
 
     def plusX(self):  # works only for amplitude graph
         self.rightXManipulated = self.xRightLimit - (self.xDivided * self.plusXTimes)
@@ -266,3 +291,18 @@ class Ui_MainWindow():
             self.drawGraph(self.leftXManipulated, self.rightXManipulated, self.bottomYManipulated, self.topYManipulated)
         self.plusYTimes += 1
         self.minusYTimes -= 1
+
+    def windowKaiser(self):
+        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, np.kaiser(256, 8))
+
+    def windowHanning(self):
+        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, window_hanning)
+
+    def windowBartlett(self):
+        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, np.bartlett(256))
+
+    def windowBlackman(self):
+        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, np.blackman(256))
+
+    def windowHamming(self):
+        self.drawGraph(self.xLeftLimit, self.xRightLimit, self.yBottomLimitAmp, self.yTopLimitAmp, np.hamming(256))
