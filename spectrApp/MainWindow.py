@@ -179,7 +179,7 @@ class Ui_MainWindow():
         self.spectrGraph.set_xlabel('Czas [s]')
 
     def prepareAmplitudeGraph(self):
-        self.ampliGraph.plot(self.times, self.dataDimension)
+        self.ampliGraph.plot(self.times, self.dataDimension, linewidth=0.2)
         # self.ampliGraph.set_xlim(left=self.XLeftLimit, right=self.XRightLimit)
         self.ampliGraph.set_ylabel('Amplituda')
         self.ampliGraph.set_xlabel('Czas [s]')
